@@ -1,0 +1,46 @@
+services:
+  netsonar:
+    build: .
+    container_name: netsonar
+    network_mode: host          # required: scanner must see the LAN directly
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    volumes:
+      - ./data:/data
+      # ── mDNS: avahi-browse inside the container talks to the host avahi daemon
+      # Requires avahi-daemon running on the host (e.g. `systemctl start avahi-daemon`)
+      # If the host does not have avahi, these mounts are silently ignored at runtime.
+      - /var/run/dbus:/var/run/dbus:ro
+      - /var/run/avahi-daemon:/var/run/avahi-daemon:ro
+      # ── DHCP lease files (Debian/Ubuntu: dhclient writes here)
+      # Allows the scanner to detect the DHCP server IP and DHCP-provided DNS servers.
+      # The directory is created automatically on Debian when dhclient runs.
+      - /var/lib/dhcp:/var/lib/dhcp:ro
+    environment:
+      # ── Scanner ──────────────────────────────────────
+      - SCAN_INTERVAL_MINUTES=60          # how often to auto-scan (0 = disabled)
+      - SCAN_TIMEOUT_MS=500               # per-host ping timeout
+      - NMAP_EXTRA_ARGS=                  # extra nmap flags if needed
+
+      # ── SNMP ─────────────────────────────────────────
+      - SNMP_COMMUNITY=public             # read-only community string for gateway ARP walk
+
+      # ── Email notifications ───────────────────────────
+      # Set NOTIFY_ENABLED=true and fill SMTP fields to enable
+      - NOTIFY_ENABLED=false
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=you@gmail.com
+      - SMTP_PASS=your_app_password
+      - NOTIFY_FROM=netsonar@yourdomain.com
+      - NOTIFY_TO=you@yourdomain.com
+
+      # ── App ──────────────────────────────────────────
+      - DB_PATH=/data/netsonar.db
+      - TZ=Europe/London          # set your timezone
+      - PORT=7979            # change here to use a different port
+
+    restart: unless-stopped
+    # With network_mode: host the port is the uvicorn one (PORT env var)
+    # Access at http://<server-ip>:${PORT}

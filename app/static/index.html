@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetSonar</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header class="hdr">
+  <canvas id="gol-canvas" aria-hidden="true"></canvas>
+  <div class="hdr-title">
+    <div class="pre">// NETWORK INTELLIGENCE PLATFORM</div>
+    <div class="hdr-brand">NET-SONAR<span class="blink">_</span></div>
+    <div class="sub">PERSISTENT TOPOLOGY MONITOR · v1.0</div>
+  </div>
+  <div class="hdr-center">
+    <div id="scan-status-badge" class="status-idle">● IDLE</div>
+  </div>
+  <div class="hdr-meta">
+    <div>LAST SCAN &nbsp;<span class="val" id="meta-last-scan">—</span></div>
+    <div>DURATION &nbsp;&nbsp;<span class="val" id="meta-duration">—</span></div>
+    <div>INTERVAL &nbsp;<span class="val" id="meta-interval">—</span></div>
+    <div>HOSTS &nbsp;&nbsp;&nbsp;<span class="val" id="meta-hosts">—</span></div>
+    <div>NEXT SCAN &nbsp;<span class="val" id="meta-next-scan">—</span></div>
+  </div>
+</header>
+
+<!-- ── STAT CARDS ── -->
+<div class="stats" id="stat-cards">
+  <div class="stat">
+    <div class="lbl">Total Scans</div>
+    <div class="val" id="cnt-scans">—</div>
+    <div class="sub">in database</div>
+  </div>
+  <div class="stat">
+    <div class="lbl">Active Hosts</div>
+    <div class="val" id="cnt-hosts">—</div>
+    <div class="sub">last scan</div>
+  </div>
+  <div class="stat">
+    <div class="lbl">Known Devices</div>
+    <div class="val" id="cnt-known">—</div>
+    <div class="sub">in registry</div>
+  </div>
+  <div class="stat">
+    <div class="lbl">Subnet</div>
+    <div class="val" id="cnt-subnets">—</div>
+    <div class="sub">last scan</div>
+  </div>
+</div>
+
+<!-- ── NAV TABS ── -->
+<nav class="nav-tabs">
+  <button class="ntab active" data-tab="live"    onclick="switchTab('live')">&#9632; Live Scan</button>
+  <button class="ntab"        data-tab="history" onclick="switchTab('history')">&#9632; History</button>
+  <button class="ntab"        data-tab="devices" onclick="switchTab('devices')">&#9632; Devices</button>
+  <button class="ntab"        data-tab="notify"  onclick="switchTab('notify')" id="tab-btn-notify">&#9632; Notifications<span id="notify-badge" class="notify-badge hidden"></span></button>
+  <button class="ntab"        data-tab="risk"    onclick="switchTab('risk')">&#9632; Risk</button>
+  <button class="ntab"        data-tab="graph"   onclick="switchTab('graph')">&#9632; Graph</button>
+  <button class="ntab"        data-tab="diff"       onclick="switchTab('diff')">&#9632; Compare</button>
+  <button class="ntab"        data-tab="historical" id="tab-btn-historical" style="display:none" onclick="switchTab('historical')">&#9632; Historical View</button>
+  <div class="ntab-spacer"></div>
+  <button class="scan-btn" id="scanBtn" onclick="triggerScan()">&#9654; START SCAN</button>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════ TAB: LIVE ══ -->
+<div id="tab-live" class="tab-content active">
+  <div class="main-layout">
+
+    <!-- Table panel -->
+    <div class="tpanel">
+      <div class="toolbar">
+        <div class="search-wrap">
+          <input class="search-box" id="searchBox" type="text" placeholder="filter ip, mac, hostname, role, port...">
+        </div>
+        <div class="filter-btns" id="live-filter-btns">
+          <button class="fbtn active" data-role="ALL"            onclick="setFilter(this,'ALL')">ALL</button>
+          <button class="fbtn"        data-role="GATEWAY/ROUTER" onclick="setFilter(this,'GATEWAY/ROUTER')">GW</button>
+          <button class="fbtn"        data-role="Host"           onclick="setFilter(this,'Host')">HOST</button>
+        </div>
+        <!-- id used to scope active-state reset to the live view only -->
+        <div class="net-tabs" id="netTabs"></div>
+      </div>
+      <div id="tablePanel"></div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="side-section">
+        <div class="side-title">&#9632; Topology Map</div>
+        <svg id="topo-svg" viewBox="0 0 260 220"></svg>
+      </div>
+      <div class="side-section">
+        <div class="side-title">&#9632; RTT Distribution</div>
+        <div class="rtt-bars" id="rttBars"></div>
+      </div>
+      <div class="side-section">
+        <div class="side-title">&#9632; Device Summary</div>
+        <div class="dev-list" id="devList"></div>
+      </div>
+      <div class="side-section">
+        <div class="side-title">&#9632; Scan Log</div>
+        <div class="log-stream" id="logStream"></div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ TAB: HISTORY ══ -->
+<div id="tab-history" class="tab-content">
+  <div class="history-panel">
+    <div class="history-toolbar">
+      <span class="side-title" style="border:none;margin:0">RECORDED SCANS</span>
+      <span id="history-total" style="font-size:.65rem;color:var(--textdim)"></span>
+    </div>
+    <table class="htable" id="historyTable">
+      <thead>
+        <tr>
+          <th>#ID</th>
+          <th>Date / Time</th>
+          <th>Duration</th>
+          <th>Subnet</th>
+          <th>Hosts</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+    <div class="history-pagination" id="historyPager"></div>
+
+    <!-- Scan detail drawer -->
+    <div id="scanDetail" class="scan-detail hidden">
+      <div class="scan-detail-header">
+        <span id="scanDetailTitle">SCAN #—</span>
+        <button class="close-btn" onclick="closeScanDetail()">✕</button>
+      </div>
+      <div class="scan-detail-toolbar">
+        <input class="search-box" id="detailSearch" type="text" placeholder="filter..." oninput="filterDetail()">
+        <span id="detailCount" style="font-size:.65rem;color:var(--textdim)"></span>
+      </div>
+      <div id="scanDetailContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════ TAB: DEVICES ══ -->
+<div id="tab-devices" class="tab-content">
+  <div class="history-panel">
+    <div class="history-toolbar">
+      <span class="side-title" style="border:none;margin:0">DEVICE REGISTRY</span>
+      <input class="search-box" id="devSearch" type="text" placeholder="search mac, alias, ip, hostname..." oninput="loadKnownDevices()" style="max-width:320px">
+      <label class="fbtn">
+        <input type="checkbox" id="trustedOnly" onchange="loadKnownDevices()" style="display:none"> TRUSTED ONLY
+      </label>
+    </div>
+    <table class="htable" id="devTable">
+      <thead>
+        <tr>
+          <th>MAC</th>
+          <th>Vendor</th>
+          <th>Model</th>
+          <th>Alias</th>
+          <th>Type</th>
+          <th>Last IP</th>
+          <th>Hostname</th>
+          <th>First Seen</th>
+          <th>Last Seen</th>
+          <th>Ports</th>
+          <th>OS</th>
+          <th>Services</th>
+          <th>Uptime</th>
+          <th>Trusted</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="devBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Edit device modal -->
+  <div id="editModal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-title">EDIT DEVICE</div>
+      <input type="hidden" id="editMac">
+      <div class="form-row">
+        <label>Alias</label>
+        <input type="text" id="editAlias" class="search-box" style="width:100%" maxlength="128">
+      </div>
+      <div class="form-row">
+        <label>Role Override</label>
+        <select id="editRoleOverride" class="search-box" style="width:100%">
+          <option value="">— auto detect —</option>
+          <option value="GATEWAY/ROUTER">GATEWAY/ROUTER</option>
+          <option value="Host">Host</option>
+          <option value="CAMERA/NVR">CAMERA/NVR</option>
+          <option value="MEDIA PLAYER">MEDIA PLAYER</option>
+          <option value="MEDIA SERVER">MEDIA SERVER</option>
+          <option value="SMART HUB">SMART HUB</option>
+          <option value="SMART THERMOSTAT">SMART THERMOSTAT</option>
+          <option value="SMART SPEAKER">SMART SPEAKER</option>
+          <option value="NAS">NAS</option>
+          <option value="PRINTER">PRINTER</option>
+          <option value="NETWORK DEVICE">NETWORK DEVICE</option>
+          <option value="IOT DEVICE">IOT DEVICE</option>
+          <option value="SERVER">SERVER</option>
+          <option value="PC/WORKSTATION">PC/WORKSTATION</option>
+          <option value="PHONE/TABLET">PHONE/TABLET</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Note</label>
+        <textarea id="editNotes" class="search-box" style="width:100%;height:80px;resize:vertical"></textarea>
+      </div>
+      <div class="form-row">
+        <label>
+          <input type="checkbox" id="editTrusted"> Trusted device
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="fbtn" onclick="closeModal()">Cancel</button>
+        <button class="fbtn active" onclick="saveDevice()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RTT / uptime history modal -->
+  <div id="historyModal" class="modal hidden">
+    <div class="modal-box" style="max-width:640px;width:96vw">
+      <div class="modal-title">LATENCY &amp; AVAILABILITY HISTORY</div>
+      <div id="historyModalContent" style="min-height:120px"></div>
+      <div class="modal-actions">
+        <button class="fbtn active" onclick="closeHistoryModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ TAB: RISK ══ -->
+<div id="tab-risk" class="tab-content">
+  <div class="history-panel">
+
+    <!-- Summary banner -->
+    <div id="riskSummary" class="risk-summary hidden">
+      <div class="risk-net-score-wrap">
+        <div class="risk-net-label">NETWORK EXPOSURE</div>
+        <div id="riskNetGauge"></div>
+      </div>
+      <div class="risk-level-counts" id="riskLevelCounts"></div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="history-toolbar" style="margin-top:.6rem">
+      <span class="side-title" style="border:none;margin:0">&#9632; RISK ASSESSMENT</span>
+      <span id="risk-total" style="font-size:.65rem;color:var(--textdim)"></span>
+      <div class="filter-btns" id="risk-filter-btns">
+        <button class="fbtn active" data-level="ALL"      onclick="setRiskFilter(this,'ALL')">ALL</button>
+        <button class="fbtn"        data-level="CRITICAL" onclick="setRiskFilter(this,'CRITICAL')">CRITICAL</button>
+        <button class="fbtn"        data-level="HIGH"     onclick="setRiskFilter(this,'HIGH')">HIGH</button>
+        <button class="fbtn"        data-level="MEDIUM"   onclick="setRiskFilter(this,'MEDIUM')">MEDIUM</button>
+        <button class="fbtn"        data-level="LOW"      onclick="setRiskFilter(this,'LOW')">LOW</button>
+        <button class="fbtn"        data-level="MINIMAL"  onclick="setRiskFilter(this,'MINIMAL')">MINIMAL</button>
+      </div>
+    </div>
+
+    <div id="riskList" class="risk-list"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ TAB: NOTIFICATIONS ══ -->
+<div id="tab-notify" class="tab-content">
+  <div class="history-panel">
+    <div class="history-toolbar">
+      <span class="side-title" style="border:none;margin:0">&#9632; EVENT LOG</span>
+      <span id="notify-total" style="font-size:.65rem;color:var(--textdim)"></span>
+      <div class="filter-btns" id="notify-filter-btns">
+        <button class="fbtn active" data-type="all"          onclick="setNotifyFilter(this,'all')">ALL</button>
+        <button class="fbtn"        data-type="new"          onclick="setNotifyFilter(this,'new')">&#9650; NEW</button>
+        <button class="fbtn"        data-type="disappeared"  onclick="setNotifyFilter(this,'disappeared')">&#9660; GONE</button>
+        <button class="fbtn"        data-type="reappeared"   onclick="setNotifyFilter(this,'reappeared')">&#8635; BACK</button>
+        <button class="fbtn"        data-type="ports_changed" onclick="setNotifyFilter(this,'ports_changed')">&#9632; PORTS</button>
+      </div>
+    </div>
+    <div id="notifyList" class="notify-list"></div>
+    <div class="history-pagination" id="notifyPager"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ TAB: GRAPH ══ -->
+<div id="tab-graph" class="tab-content">
+  <div id="graphPanel" class="graph-panel">
+    <div class="empty-state">// SELECT GRAPH TAB TO LOAD</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ TAB: DIFF ══ -->
+<div id="tab-diff" class="tab-content">
+  <div class="history-panel">
+    <div class="history-toolbar">
+      <span class="side-title" style="border:none;margin:0">COMPARE SCANS</span>
+    </div>
+    <div class="diff-selectors">
+      <div class="diff-sel-block">
+        <div class="side-title">SCAN A (older)</div>
+        <select id="diffSelA" class="search-box"></select>
+      </div>
+      <div class="diff-arrow">⇄</div>
+      <div class="diff-sel-block">
+        <div class="side-title">SCAN B (newer)</div>
+        <select id="diffSelB" class="search-box"></select>
+      </div>
+      <button class="fbtn active" style="align-self:flex-end" onclick="runDiff()">COMPARE</button>
+    </div>
+    <div id="diffResult"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ TAB: HISTORICAL VIEW ══ -->
+<div id="tab-historical" class="tab-content">
+  <div class="main-layout">
+
+    <!-- Table panel -->
+    <div class="tpanel">
+      <div class="hist-view-banner">
+        <div class="hist-scan-info">
+          <span class="side-title" style="border:none;margin:0;padding:0">&#9632; HISTORICAL VIEW</span>
+          <span id="hist-scan-title" style="font-size:.68rem;color:var(--green);font-family:'Orbitron',monospace;letter-spacing:.08em">SCAN #—</span>
+        </div>
+        <button class="fbtn active" onclick="openDiffFromHistorical()">&#8644; COMPARE</button>
+      </div>
+      <div class="toolbar">
+        <div class="search-wrap">
+          <input class="search-box" id="histSearchBox" type="text" placeholder="filter ip, mac, hostname, role, port..." oninput="histSearchChanged(this.value)">
+        </div>
+        <div class="filter-btns" id="hist-filter-btns">
+          <button class="fbtn active" data-role="ALL"            onclick="setHistFilter(this,'ALL')">ALL</button>
+          <button class="fbtn"        data-role="GATEWAY/ROUTER" onclick="setHistFilter(this,'GATEWAY/ROUTER')">GW</button>
+          <button class="fbtn"        data-role="Host"           onclick="setHistFilter(this,'Host')">HOST</button>
+        </div>
+        <div class="net-tabs" id="histNetTabs"></div>
+      </div>
+      <div id="histTablePanel"></div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="side-section">
+        <div class="side-title">&#9632; Topology Map</div>
+        <svg id="hist-topo-svg" viewBox="0 0 260 220"></svg>
+      </div>
+      <div class="side-section">
+        <div class="side-title">&#9632; RTT Distribution</div>
+        <div class="rtt-bars" id="histRttBars"></div>
+      </div>
+      <div class="side-section">
+        <div class="side-title">&#9632; Device Summary</div>
+        <div class="dev-list" id="histDevList"></div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<!-- ── FOOTER ── -->
+<footer class="ftr">
+  <div class="status">&#9679; NET-SONAR · NETWORK INTELLIGENCE PLATFORM</div>
+  <div id="ftr-time"></div>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

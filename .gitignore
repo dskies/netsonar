@@ -1,0 +1,40 @@
+# ── Runtime data ─────────────────────────────────────────────────────────────
+data/                   # SQLite database (created at runtime by Docker volume)
+*.db
+*.db-shm
+*.db-wal
+
+# ── Offline build packages ────────────────────────────────────────────────────
+# Run prepare-offline.ps1 to populate these before an air-gapped deploy.
+# They are excluded here because they are large binary files (~20 MB combined).
+packages/apk/
+packages/wheels/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+.dockerignore
+
+# ── Editor / OS ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Secrets / env files ───────────────────────────────────────────────────────
+.env
+.env.*
