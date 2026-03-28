@@ -12,12 +12,13 @@ Responsibilities:
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from config import config
 from models import Scan, ScanDevice, KnownDevice, DeviceRttHistory, DeviceEvent, SessionLocal
@@ -323,6 +324,43 @@ def _fire_notifications(new_devices, gone_devices, port_changes, subnets, total_
     asyncio.ensure_future(_notify())
 
 
+# ── Retention cleanup ────────────────────────────────────────────────────────────
+
+def _run_retention_cleanup() -> None:
+    """Delete rows older than RETENTION_DAYS from scans, device_rtt_history and device_events."""
+    if config.RETENTION_DAYS <= 0:
+        return
+    cutoff = datetime.utcnow() - timedelta(days=config.RETENTION_DAYS)
+    with SessionLocal() as db:
+        # scans — cascade deletes scan_devices automatically
+        deleted_scans = (
+            db.query(Scan)
+            .filter(Scan.started_at < cutoff)
+            .delete(synchronize_session=False)
+        )
+        # device_rtt_history
+        deleted_rtt = (
+            db.query(DeviceRttHistory)
+            .filter(DeviceRttHistory.scanned_at < cutoff)
+            .delete(synchronize_session=False)
+        )
+        # device_events
+        deleted_events = (
+            db.query(DeviceEvent)
+            .filter(DeviceEvent.created_at < cutoff)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+    if deleted_scans or deleted_rtt or deleted_events:
+        log.info(
+            "Retention cleanup (cutoff %s): %d scans, %d rtt rows, %d events removed.",
+            cutoff.date(), deleted_scans, deleted_rtt, deleted_events,
+        )
+        # Reclaim disk space in SQLite
+        with SessionLocal() as db:
+            db.execute(text("VACUUM"))
+
+
 # ── Scan job ───────────────────────────────────────────────────────────────────
 
 async def _scan_job() -> None:
@@ -388,6 +426,17 @@ def start_scheduler() -> None:
         replace_existing=True,
         max_instances=1,
     )
+    if config.RETENTION_DAYS > 0:
+        from apscheduler.triggers.cron import CronTrigger
+        _scheduler.add_job(
+            _run_retention_cleanup,
+            trigger=CronTrigger(hour=3, minute=0),
+            id="retention_cleanup",
+            name=f"Retention cleanup (>{config.RETENTION_DAYS}d)",
+            replace_existing=True,
+            max_instances=1,
+        )
+        log.info("Retention cleanup scheduled daily at 03:00 (cutoff: %d days).", config.RETENTION_DAYS)
     _scheduler.start()
     log.info("Scheduler started: scan every %d minutes.", config.SCAN_INTERVAL_MINUTES)
 

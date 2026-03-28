@@ -8,6 +8,7 @@ class Config:
 
     # Scheduler
     SCAN_INTERVAL_MINUTES: int = int(os.getenv("SCAN_INTERVAL_MINUTES", "15"))
+    RETENTION_DAYS: int = int(os.getenv("RETENTION_DAYS", "730"))
     SCAN_TIMEOUT_MS: int = int(os.getenv("SCAN_TIMEOUT_MS", "500"))
     NMAP_EXTRA_ARGS: str = os.getenv("NMAP_EXTRA_ARGS", "")
 
